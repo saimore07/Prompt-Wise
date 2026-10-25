@@ -2,7 +2,7 @@
   "name": "optiprompt-workspace",
   "version": "1.0.0",
   "private": true,
-  "description": "OptiPrompt — Prompt Optimization & Token Efficiency Engine",
+  "description": "PromptWise — Prompt Optimization & Token Efficiency Engine",
   "workspaces": [
     "server",
     "client"

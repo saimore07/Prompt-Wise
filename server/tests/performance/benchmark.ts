@@ -1,12 +1,15 @@
 import { performance } from 'perf_hooks';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { createApp } from '../../src/app.js';
 import { config } from '../../src/config/env.js';
 import { FakeGeminiService, GeminiService } from '../../src/services/gemini.service.js';
 import { OptimizerService } from '../../src/services/optimizer.service.js';
 import { ExecutorService } from '../../src/services/executor.service.js';
 import supertest from 'supertest';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export interface BenchmarkCase {
   id: string;
@@ -215,7 +218,7 @@ export async function runBenchmark(options: {
     cases: caseResults,
   };
 
-  const targetPath = options.outputPath || path.resolve(process.cwd(), 'tests/performance/results.json');
+  const targetPath = options.outputPath || path.resolve(__dirname, 'results.json');
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
   fs.writeFileSync(targetPath, JSON.stringify(report, null, 2), 'utf8');
 
@@ -229,7 +232,7 @@ if (process.argv[1]?.endsWith('benchmark.ts') || process.argv[1]?.endsWith('benc
     .then((report) => {
       console.log(`[Benchmark] Completed ${report.summary.totalRequests} benchmark runs.`);
       console.log(`[Benchmark] Overall p50: ${report.summary.overallP50Ms}ms | p95: ${report.summary.overallP95Ms}ms | Avg: ${report.summary.overallAvgMs}ms`);
-      console.log(`[Benchmark] Results written to tests/performance/results.json`);
+      console.log(`[Benchmark] Results written to server/tests/performance/results.json`);
     })
     .catch((err) => {
       console.error('[Benchmark] Error running benchmark:', err);

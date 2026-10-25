@@ -60,11 +60,19 @@ export async function fetchHealth(signal?: AbortSignal): Promise<ServiceHealth> 
   return handleResponse<ServiceHealth>(res);
 }
 
+export interface StreamProgressStage {
+  id: string;
+  label: string;
+  percent: number;
+}
+
 export async function optimizePrompt(
   params: {
     rawPrompt: string;
     taskCategory?: TaskCategory;
     model?: string;
+    modelFamily?: string;
+    tokenizerFamily?: string;
   },
   signal?: AbortSignal
 ): Promise<OptimizationResult> {
@@ -75,6 +83,98 @@ export async function optimizePrompt(
     signal,
   });
   return handleResponse<OptimizationResult>(res);
+}
+
+export async function optimizePromptStream(
+  params: {
+    rawPrompt: string;
+    taskCategory?: TaskCategory;
+    model?: string;
+    modelFamily?: string;
+    tokenizerFamily?: string;
+  },
+  onStage: (stage: StreamProgressStage) => void,
+  signal?: AbortSignal
+): Promise<OptimizationResult> {
+  const res = await fetch('/api/optimize', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+    },
+    body: JSON.stringify({ ...params, stream: true }),
+    signal,
+  });
+
+  if (!res.ok) {
+    const errorJson = await res.json().catch(() => null);
+    throw new ApiError(res.status, errorJson?.error || {
+      code: `HTTP_${res.status}`,
+      message: res.statusText || 'Optimization failed',
+    });
+  }
+
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('text/event-stream')) {
+    const json = await res.json();
+    return json.data !== undefined ? json.data : json;
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) {
+    throw new Error('ReadableStream not supported by browser environment.');
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let finalResult: OptimizationResult | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n\n');
+    buffer = lines.pop() || '';
+
+    for (const chunk of lines) {
+      if (!chunk.trim()) continue;
+
+      let event = 'message';
+      let dataStr = '';
+
+      for (const line of chunk.split('\n')) {
+        if (line.startsWith('event: ')) {
+          event = line.slice(7).trim();
+        } else if (line.startsWith('data: ')) {
+          dataStr = line.slice(6).trim();
+        }
+      }
+
+      if (dataStr) {
+        try {
+          const parsedData = JSON.parse(dataStr);
+          if (event === 'stage') {
+            onStage(parsedData);
+          } else if (event === 'complete') {
+            finalResult = parsedData.data;
+          } else if (event === 'error') {
+            throw new Error(parsedData.error?.message || 'Streaming optimization failed');
+          }
+        } catch (e: any) {
+          if (e.message && e.message !== 'Unexpected end of JSON input') {
+            throw e;
+          }
+        }
+      }
+    }
+  }
+
+  if (!finalResult) {
+    throw new Error('Stream ended without receiving final optimization result.');
+  }
+
+  return finalResult;
 }
 
 export async function executePrompt(

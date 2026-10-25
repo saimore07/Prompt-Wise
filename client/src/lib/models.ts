@@ -1,3 +1,57 @@
+import { TokenizerFamily } from '../types/index.js';
+
+export interface TokenizerFamilyInfo {
+  id: TokenizerFamily;
+  name: string;
+  description: string;
+  badge: string;
+  encoding: string;
+  defaultModel: string;
+}
+
+export const TOKENIZER_FAMILIES: TokenizerFamilyInfo[] = [
+  {
+    id: 'openai-o200k',
+    name: 'OpenAI o200k (GPT-4o, o1, o3)',
+    description: 'Modern 200k BPE tokenizer with exceptional token density for multilingual & code.',
+    badge: 'o200k_base',
+    encoding: 'o200k_base',
+    defaultModel: 'gpt-4o',
+  },
+  {
+    id: 'openai-cl100k',
+    name: 'OpenAI cl100k (GPT-4, GPT-3.5)',
+    description: 'Standard 100k BPE vocabulary tokenizer for GPT-4 and classic LLM pipelines.',
+    badge: 'cl100k_base',
+    encoding: 'cl100k_base',
+    defaultModel: 'gpt-4o-mini',
+  },
+  {
+    id: 'anthropic-claude',
+    name: 'Anthropic Claude 3 / 3.5',
+    description: 'Byte-pair tokenizer calibrated for Claude 3.5 Sonnet and Haiku context density.',
+    badge: 'Claude BPE',
+    encoding: 'claude_bpe',
+    defaultModel: 'claude-3-5-sonnet',
+  },
+  {
+    id: 'llama3-nemotron',
+    name: 'Meta Llama 3 / NVIDIA Nemotron',
+    description: '128k BPE vocabulary optimized for open-source high-throughput inference.',
+    badge: '128k BPE',
+    encoding: 'llama3_128k',
+    defaultModel: 'nvidia/nemotron-3.5-bolt-e4b',
+  },
+  {
+    id: 'google-gemini',
+    name: 'Google Gemini',
+    description: 'Google native tokenization engine with fine-grained multimodal alignment.',
+    badge: 'Gemini Native',
+    encoding: 'gemini_native',
+    defaultModel: 'gemini-3.5-flash-lite',
+  },
+];
+
 export interface ModelInfo {
   id: string;
   name: string;
@@ -8,6 +62,8 @@ export interface ModelInfo {
   latencyTier: 'Ultra-Fast' | 'Fast' | 'Reasoning' | 'Deep Analysis';
   inputPrice: string;
   outputPrice: string;
+  tokenizerFamily?: TokenizerFamily;
+  modelFamily?: string;
 }
 
 export const SUPPORTED_MODELS: ModelInfo[] = [
@@ -18,10 +74,10 @@ export const SUPPORTED_MODELS: ModelInfo[] = [
     provider: 'nvidia',
     providerName: 'NVIDIA Nemotron',
     description: 'Ultra-fast open-source model with instant execution and zero rate limit bounds.',
-    badge: '⚡ Active · Free & Open-Source',
+    badge: '⚡ Active',
     latencyTier: 'Ultra-Fast',
-    inputPrice: 'Free (Open Source)',
-    outputPrice: 'Free (Open Source)',
+    inputPrice: 'Free',
+    outputPrice: 'Free',
   },
   {
     id: 'nvidia/nemotron-3-ultra-550b-a55b',
@@ -31,8 +87,8 @@ export const SUPPORTED_MODELS: ModelInfo[] = [
     description: 'Massive 550B parameter open-weights flagship for nuanced, multi-constraint tasks.',
     badge: '🧠 550B Flagship',
     latencyTier: 'Deep Analysis',
-    inputPrice: 'Free (Open Source)',
-    outputPrice: 'Free (Open Source)',
+    inputPrice: 'Free',
+    outputPrice: 'Free',
   },
   {
     id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
@@ -40,10 +96,10 @@ export const SUPPORTED_MODELS: ModelInfo[] = [
     provider: 'nvidia',
     providerName: 'NVIDIA Nemotron',
     description: 'Lightweight reasoning-focused open architecture model.',
-    badge: '🔬 Fast Reasoning',
+    badge: '🔬 Reasoning',
     latencyTier: 'Reasoning',
-    inputPrice: 'Free (Open Source)',
-    outputPrice: 'Free (Open Source)',
+    inputPrice: 'Free',
+    outputPrice: 'Free',
   },
   // Google Gemini
   {

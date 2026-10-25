@@ -89,4 +89,29 @@ describe('TokenMetricsService Unit Tests', () => {
     expect(metrics.costEstimate?.inputCost).toBeGreaterThan(0);
     expect(metrics.costEstimate?.isEstimate).toBe(true);
   });
+
+  // Dynamic Tokenizer Switching: OpenAI o200k, cl100k, Claude 3, Llama 3
+  it('dynamically switches tokenizer logic based on requested model family', async () => {
+    const metricsService = new TokenMetricsService(new FakeGeminiService());
+
+    const testPrompt = 'Calculate the discrete Fourier transform of a 1024-point real signal.';
+
+    // OpenAI o200k
+    const o200kCount = await metricsService.countSingleWithCache('gpt-4o', testPrompt, 'openai-o200k');
+    expect(o200kCount).toBeGreaterThan(0);
+
+    // OpenAI cl100k
+    const cl100kCount = await metricsService.countSingleWithCache('gpt-4', testPrompt, 'openai-cl100k');
+    expect(cl100kCount).toBeGreaterThan(0);
+
+    // Llama 3 / Nemotron
+    const llamaCount = await metricsService.countSingleWithCache('nvidia/nemotron-3.5-bolt-e4b', testPrompt, 'llama3-nemotron');
+    expect(llamaCount).toBeGreaterThan(0);
+
+    // Test computeMetrics reflects chosen tokenizer family
+    const counts = { rawTokens: o200kCount, highContextTokens: o200kCount + 10, lowTokenTokens: o200kCount - 5 };
+    const metrics = metricsService.computeMetrics(counts, 'gpt-4o', 'Coding', null, 'openai-o200k');
+    expect(metrics.tokenizerFamily).toBe('openai-o200k');
+    expect(metrics.measuredWith).toContain('o200k_base');
+  });
 });

@@ -48,6 +48,14 @@ export interface VerificationDetails {
   fallbackApplied: boolean;
 }
 
+export type TokenizerFamily =
+  | 'openai-o200k'
+  | 'openai-cl100k'
+  | 'anthropic-claude'
+  | 'llama3-nemotron'
+  | 'google-gemini'
+  | 'auto';
+
 export interface StageTimings {
   totalMs: number;
   analysisAndGenerationMs: number;
@@ -62,7 +70,20 @@ export interface Metrics {
   highContextChangePercent: number | null;
   lowTokenReductionPercent: number | null;
   measuredWith: string;
+  tokenizerFamily?: TokenizerFamily;
   costEstimate: CostEstimate | null;
+}
+
+export interface CostArbitrageItem {
+  model: string;
+  provider: string;
+  inputPricePerM: number;
+  outputPricePerM: number;
+  inputCost: number;
+  estimatedOutputCost: number;
+  totalCostPerCall: number;
+  costPer1kCalls: number;
+  savingsPercentVsBaseline: number;
 }
 
 export interface OptimizationResult {
@@ -75,6 +96,7 @@ export interface OptimizationResult {
   highContext: string;
   lowToken: string;
   warnings: OptimizationWarning[];
+  securityWarnings?: string[];
   recommendation: Recommendation;
   metrics: Metrics;
   verificationStatus?: {
@@ -85,6 +107,7 @@ export interface OptimizationResult {
   isAlreadyOptimized?: boolean;
   optimizationStatus?: 'OPTIMIZED' | 'ALREADY_OPTIMIZED' | 'MINIMAL_GAINS';
   targetProvider?: string;
+  arbitrageMetrics?: CostArbitrageItem[];
 }
 
 export interface ExecutionUsage {

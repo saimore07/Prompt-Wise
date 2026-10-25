@@ -109,4 +109,26 @@ describe('Verification Gate & Recommendation Fallback', () => {
     expect(result.recommendation.reason).toContain('Low-Token variant failed verification');
     expect(result.warnings.some((w) => w.code === 'VERIFICATION_GATE_REVERTED_RECOMMENDATION')).toBe(true);
   });
+
+  it('programmatically detects unextracted hard constraints (regex and path) and triggers verification failure', () => {
+    const optimizer = new OptimizerService(new FakeGeminiService());
+    const rawPrompt = 'Run tests in tests/unit/api.test.ts with pattern /^AIza[0-9]{10}$/ and keep under 50 words.';
+
+    // Even if detectedConstraints from LLM missed the regex, programmatic check catches it
+    const emptyConstraints = {
+      mustPreserve: [],
+      outputFormat: null,
+      lengthLimit: null,
+      language: null,
+      mustAvoid: [],
+      exactLiterals: [],
+    };
+
+    // Low-token text dropped the regex!
+    const droppedVariant = 'Run tests in tests/unit/api.test.ts under 50 words.';
+    const check = optimizer.verifyVariant(droppedVariant, emptyConstraints, rawPrompt, 'lowToken');
+
+    expect(check.passed).toBe(false);
+    expect(check.exactLiteralsMissing).toContain('/^AIza[0-9]{10}$/');
+  });
 });

@@ -81,45 +81,118 @@ async function main() {
 
   const optimizer = new OptimizerService(geminiService);
   const evaluator = new GoldenEvaluator();
-  const results = [];
 
-  for (let i = 0; i < cases.length; i++) {
-    const c = cases[i];
-    process.stdout.write(`Evaluating [${i + 1}/${cases.length}] ${c.id}: ${c.name}... `);
+  /**
+   * Concurrency Limiter: Caps maximum parallel API invocations to 3.
+   */
+  class ConcurrencyLimiter {
+    private active = 0;
+    private queue: Array<() => void> = [];
 
-    try {
-      const optimizationResult = await optimizer.optimize({
-        rawPrompt: c.rawPrompt,
-        requestId: `eval_${c.id}`,
-      });
+    constructor(private maxConcurrent: number) {}
 
-      const score = evaluator.evaluateCase(c, optimizationResult);
-      results.push(score);
-      console.log(score.passed ? 'PASSED' : 'FAILED');
-      if (!score.passed) {
-        console.log(`   Failure reason(s): ${score.failureReasons.join(', ')}`);
+    async run<T>(fn: () => Promise<T>): Promise<T> {
+      if (this.active >= this.maxConcurrent) {
+        await new Promise<void>((resolve) => this.queue.push(resolve));
       }
-    } catch (err: any) {
-      console.log('ERROR');
-      console.error(`   Execution error on case ${c.id}: ${err.message}`);
-      results.push({
-        caseId: c.id,
-        category: c.category,
-        name: c.name,
-        intentPreservation: 0,
-        constraintPreservation: 0,
-        clarityAndUsability: 0,
-        compressionEfficiency: 0,
-        unsupportedAdditionsCount: 0,
-        formatInvariantPassed: false,
-        literalInvariantsPassed: false,
-        warningsDetected: [],
-        tokenMetrics: { rawTokens: null, highContextTokens: null, lowTokenTokens: null, lowTokenReductionPercent: null },
-        passed: false,
-        failureReasons: [`Runtime error: ${err.message}`],
-      });
+      this.active++;
+      try {
+        return await fn();
+      } finally {
+        this.active--;
+        const next = this.queue.shift();
+        if (next) next();
+      }
     }
   }
+
+  /**
+   * Exponential backoff retry handler for 429 Too Many Requests / Quota Exceeded.
+   */
+  async function retryWithExponentialBackoff<T>(
+    fn: () => Promise<T>,
+    caseId: string,
+    maxRetries = 4,
+    baseDelayMs = 1500
+  ): Promise<T> {
+    let attempt = 0;
+    while (attempt <= maxRetries) {
+      try {
+        return await fn();
+      } catch (err: any) {
+        const isRateLimit =
+          err?.status === 429 ||
+          err?.statusCode === 429 ||
+          err?.name === 'GeminiRateLimitError' ||
+          String(err?.message || '').includes('429') ||
+          String(err?.message || '').toLowerCase().includes('quota') ||
+          String(err?.message || '').toLowerCase().includes('rate limit');
+
+        if (isRateLimit && attempt < maxRetries) {
+          attempt++;
+          const jitter = Math.floor(Math.random() * 600);
+          const delayMs = baseDelayMs * Math.pow(2, attempt - 1) + jitter;
+          console.warn(
+            `\n[RateLimitBackoff] Case ${caseId} encountered 429 rate limit. Backing off for ${(delayMs / 1000).toFixed(2)}s (attempt ${attempt}/${maxRetries})...`
+          );
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new Error(`Exceeded max retries for case ${caseId}`);
+  }
+
+  const limiter = new ConcurrencyLimiter(3);
+  console.log(`Starting evaluations with concurrency pool of 3 and exponential backoff retry for 429 errors...\n`);
+
+  const results: any[] = new Array(cases.length);
+
+  const evalPromises = cases.map((c, i) =>
+    limiter.run(async () => {
+      process.stdout.write(`Evaluating [${i + 1}/${cases.length}] ${c.id}: ${c.name}... `);
+
+      try {
+        const optimizationResult = await retryWithExponentialBackoff(
+          () =>
+            optimizer.optimize({
+              rawPrompt: c.rawPrompt,
+              requestId: `eval_${c.id}`,
+            }),
+          c.id
+        );
+
+        const score = evaluator.evaluateCase(c, optimizationResult);
+        results[i] = score;
+        console.log(score.passed ? 'PASSED' : 'FAILED');
+        if (!score.passed) {
+          console.log(`   Failure reason(s): ${score.failureReasons.join(', ')}`);
+        }
+      } catch (err: any) {
+        console.log('ERROR');
+        console.error(`   Execution error on case ${c.id}: ${err.message}`);
+        results[i] = {
+          caseId: c.id,
+          category: c.category,
+          name: c.name,
+          intentPreservation: 0,
+          constraintPreservation: 0,
+          clarityAndUsability: 0,
+          compressionEfficiency: 0,
+          unsupportedAdditionsCount: 0,
+          formatInvariantPassed: false,
+          literalInvariantsPassed: false,
+          warningsDetected: [],
+          tokenMetrics: { rawTokens: null, highContextTokens: null, lowTokenTokens: null, lowTokenReductionPercent: null },
+          passed: false,
+          failureReasons: [`Runtime error: ${err.message}`],
+        };
+      }
+    })
+  );
+
+  await Promise.all(evalPromises);
 
   const report = evaluator.generateReport(results, config.GEMINI_MODEL, isLive ? 'live_gemini' : 'offline_fixture');
   const reportsDir = path.resolve(process.cwd(), 'evaluation_reports');

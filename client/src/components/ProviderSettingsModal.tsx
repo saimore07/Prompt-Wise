@@ -31,7 +31,7 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
       <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col">
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
@@ -60,7 +60,7 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
             <div className="space-y-1">
               <p className="font-semibold text-emerald-300">Zero-Key Frictionless Multi-Model Mode</p>
               <p className="text-[11px] text-emerald-200/80 leading-relaxed">
-                You can select and test prompts with <strong>OpenAI, Anthropic, DeepSeek, and Llama</strong> immediately! When API keys are not yet provided, OptiPrompt automatically activates its multi-model bridge engine so you can benchmark prompt behaviors right away.
+                You can select and test prompts with <strong>OpenAI, Anthropic, DeepSeek, and Llama</strong> immediately! When API keys are not yet provided, PromptWise automatically activates its multi-model bridge engine so you can benchmark prompt behaviors right away.
               </p>
             </div>
           </div>

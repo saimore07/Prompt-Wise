@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-24T15:02:32.264Z",
+  "timestamp": "2026-10-24T19:58:08.134Z",
   "model": "gemini-3.5-flash-lite",
   "instructionVersion": "v1.2.0",
   "mode": "offline_fixture",
@@ -10,7 +10,7 @@
     "intentPreservation": 5,
     "constraintPreservation": 5,
     "clarityAndUsability": 5,
-    "compressionEfficiency": 3.5
+    "compressionEfficiency": 2.7
   },
   "results": [
     {
@@ -27,9 +27,9 @@
       "warningsDetected": [],
       "tokenMetrics": {
         "rawTokens": 33,
-        "highContextTokens": 44,
-        "lowTokenTokens": 22,
-        "lowTokenReductionPercent": 33.3
+        "highContextTokens": 50,
+        "lowTokenTokens": 21,
+        "lowTokenReductionPercent": 36.4
       },
       "passed": true,
       "failureReasons": []
@@ -45,14 +45,12 @@
       "unsupportedAdditionsCount": 0,
       "formatInvariantPassed": true,
       "literalInvariantsPassed": true,
-      "warningsDetected": [
-        "PROMPT_ALREADY_OPTIMIZED"
-      ],
+      "warningsDetected": [],
       "tokenMetrics": {
         "rawTokens": 27,
-        "highContextTokens": 57,
-        "lowTokenTokens": 26,
-        "lowTokenReductionPercent": 3.7
+        "highContextTokens": 63,
+        "lowTokenTokens": 24,
+        "lowTokenReductionPercent": 11.1
       },
       "passed": true,
       "failureReasons": []
@@ -73,7 +71,7 @@
       ],
       "tokenMetrics": {
         "rawTokens": 21,
-        "highContextTokens": 40,
+        "highContextTokens": 44,
         "lowTokenTokens": 21,
         "lowTokenReductionPercent": 0
       },
@@ -96,9 +94,9 @@
       ],
       "tokenMetrics": {
         "rawTokens": 26,
-        "highContextTokens": 44,
-        "lowTokenTokens": 25,
-        "lowTokenReductionPercent": 3.8
+        "highContextTokens": 47,
+        "lowTokenTokens": 24,
+        "lowTokenReductionPercent": 7.7
       },
       "passed": true,
       "failureReasons": []
@@ -110,16 +108,18 @@
       "intentPreservation": 5,
       "constraintPreservation": 5,
       "clarityAndUsability": 5,
-      "compressionEfficiency": 3,
+      "compressionEfficiency": 2,
       "unsupportedAdditionsCount": 0,
       "formatInvariantPassed": true,
       "literalInvariantsPassed": true,
-      "warningsDetected": [],
+      "warningsDetected": [
+        "PROMPT_ALREADY_OPTIMIZED"
+      ],
       "tokenMetrics": {
         "rawTokens": 20,
-        "highContextTokens": 26,
-        "lowTokenTokens": 18,
-        "lowTokenReductionPercent": 10
+        "highContextTokens": 37,
+        "lowTokenTokens": 20,
+        "lowTokenReductionPercent": 0
       },
       "passed": true,
       "failureReasons": []
@@ -140,7 +140,7 @@
       ],
       "tokenMetrics": {
         "rawTokens": 26,
-        "highContextTokens": 40,
+        "highContextTokens": 47,
         "lowTokenTokens": 26,
         "lowTokenReductionPercent": 0
       },
@@ -154,16 +154,16 @@
       "intentPreservation": 5,
       "constraintPreservation": 5,
       "clarityAndUsability": 5,
-      "compressionEfficiency": 5,
+      "compressionEfficiency": 3,
       "unsupportedAdditionsCount": 0,
       "formatInvariantPassed": true,
       "literalInvariantsPassed": true,
       "warningsDetected": [],
       "tokenMetrics": {
         "rawTokens": 27,
-        "highContextTokens": 36,
-        "lowTokenTokens": 21,
-        "lowTokenReductionPercent": 22.2
+        "highContextTokens": 45,
+        "lowTokenTokens": 24,
+        "lowTokenReductionPercent": 11.1
       },
       "passed": true,
       "failureReasons": []
@@ -175,16 +175,19 @@
       "intentPreservation": 5,
       "constraintPreservation": 5,
       "clarityAndUsability": 5,
-      "compressionEfficiency": 5,
+      "compressionEfficiency": 2,
       "unsupportedAdditionsCount": 0,
       "formatInvariantPassed": true,
       "literalInvariantsPassed": true,
-      "warningsDetected": [],
+      "warningsDetected": [
+        "PROMPT_ALREADY_OPTIMIZED",
+        "NO_SAFE_COMPRESSION"
+      ],
       "tokenMetrics": {
         "rawTokens": 20,
-        "highContextTokens": 25,
-        "lowTokenTokens": 14,
-        "lowTokenReductionPercent": 30
+        "highContextTokens": 39,
+        "lowTokenTokens": 20,
+        "lowTokenReductionPercent": 0
       },
       "passed": true,
       "failureReasons": []
@@ -203,11 +206,12 @@
       "warningsDetected": [
         "PROMPT_ALREADY_OPTIMIZED",
         "AMBIGUOUS_INPUT",
+        "AMBIGUOUS_INPUT",
         "NO_SAFE_COMPRESSION"
       ],
       "tokenMetrics": {
         "rawTokens": 4,
-        "highContextTokens": 36,
+        "highContextTokens": 39,
         "lowTokenTokens": 4,
         "lowTokenReductionPercent": 0
       },
@@ -227,11 +231,13 @@
       "literalInvariantsPassed": true,
       "warningsDetected": [
         "PROMPT_ALREADY_OPTIMIZED",
-        "CONTRADICTORY_CONSTRAINTS"
+        "CONTRADICTORY_CONSTRAINTS",
+        "CONTRADICTORY_CONSTRAINTS",
+        "NO_SAFE_COMPRESSION"
       ],
       "tokenMetrics": {
         "rawTokens": 16,
-        "highContextTokens": 31,
+        "highContextTokens": 36,
         "lowTokenTokens": 16,
         "lowTokenReductionPercent": 0
       },
@@ -245,19 +251,20 @@
       "intentPreservation": 5,
       "constraintPreservation": 5,
       "clarityAndUsability": 5,
-      "compressionEfficiency": 5,
+      "compressionEfficiency": 2,
       "unsupportedAdditionsCount": 0,
       "formatInvariantPassed": true,
       "literalInvariantsPassed": true,
       "warningsDetected": [
         "PROMPT_ALREADY_OPTIMIZED",
-        "VERIFICATION_GATE_REVERTED_RECOMMENDATION"
+        "VERIFICATION_GATE_REVERTED_RECOMMENDATION",
+        "NO_SAFE_COMPRESSION"
       ],
       "tokenMetrics": {
         "rawTokens": 23,
-        "highContextTokens": 33,
-        "lowTokenTokens": 16,
-        "lowTokenReductionPercent": 30.4
+        "highContextTokens": 75,
+        "lowTokenTokens": 23,
+        "lowTokenReductionPercent": 0
       },
       "passed": true,
       "failureReasons": []
@@ -277,11 +284,12 @@
         "PROMPT_ALREADY_OPTIMIZED",
         "PROMPT_INJECTION_DEFENSE_TRIGGERED",
         "PROMPT_INJECTION_DEFENSE_TRIGGERED",
+        "PROMPT_INJECTION_DEFENSE_TRIGGERED",
         "NO_SAFE_COMPRESSION"
       ],
       "tokenMetrics": {
         "rawTokens": 26,
-        "highContextTokens": 48,
+        "highContextTokens": 52,
         "lowTokenTokens": 26,
         "lowTokenReductionPercent": 0
       },
@@ -295,19 +303,20 @@
       "intentPreservation": 5,
       "constraintPreservation": 5,
       "clarityAndUsability": 5,
-      "compressionEfficiency": 5,
+      "compressionEfficiency": 2,
       "unsupportedAdditionsCount": 0,
       "formatInvariantPassed": true,
       "literalInvariantsPassed": true,
       "warningsDetected": [
         "PROMPT_ALREADY_OPTIMIZED",
-        "VERIFICATION_GATE_REVERTED_RECOMMENDATION"
+        "VERIFICATION_GATE_REVERTED_RECOMMENDATION",
+        "NO_SAFE_COMPRESSION"
       ],
       "tokenMetrics": {
         "rawTokens": 33,
-        "highContextTokens": 44,
-        "lowTokenTokens": 23,
-        "lowTokenReductionPercent": 30.3
+        "highContextTokens": 63,
+        "lowTokenTokens": 33,
+        "lowTokenReductionPercent": 0
       },
       "passed": true,
       "failureReasons": []
@@ -319,16 +328,19 @@
       "intentPreservation": 5,
       "constraintPreservation": 5,
       "clarityAndUsability": 5,
-      "compressionEfficiency": 3,
+      "compressionEfficiency": 2,
       "unsupportedAdditionsCount": 0,
       "formatInvariantPassed": true,
       "literalInvariantsPassed": true,
-      "warningsDetected": [],
+      "warningsDetected": [
+        "PROMPT_ALREADY_OPTIMIZED",
+        "NO_SAFE_COMPRESSION"
+      ],
       "tokenMetrics": {
         "rawTokens": 25,
-        "highContextTokens": 46,
-        "lowTokenTokens": 21,
-        "lowTokenReductionPercent": 16
+        "highContextTokens": 60,
+        "lowTokenTokens": 25,
+        "lowTokenReductionPercent": 0
       },
       "passed": true,
       "failureReasons": []
@@ -349,7 +361,7 @@
       ],
       "tokenMetrics": {
         "rawTokens": 23,
-        "highContextTokens": 34,
+        "highContextTokens": 46,
         "lowTokenTokens": 23,
         "lowTokenReductionPercent": 0
       },
@@ -372,9 +384,9 @@
       ],
       "tokenMetrics": {
         "rawTokens": 26,
-        "highContextTokens": 30,
-        "lowTokenTokens": 25,
-        "lowTokenReductionPercent": 3.8
+        "highContextTokens": 35,
+        "lowTokenTokens": 24,
+        "lowTokenReductionPercent": 7.7
       },
       "passed": true,
       "failureReasons": []
@@ -395,9 +407,9 @@
       ],
       "tokenMetrics": {
         "rawTokens": 83,
-        "highContextTokens": 34,
-        "lowTokenTokens": 17,
-        "lowTokenReductionPercent": 79.5
+        "highContextTokens": 41,
+        "lowTokenTokens": 18,
+        "lowTokenReductionPercent": 78.3
       },
       "passed": true,
       "failureReasons": []
@@ -409,16 +421,19 @@
       "intentPreservation": 5,
       "constraintPreservation": 5,
       "clarityAndUsability": 5,
-      "compressionEfficiency": 5,
+      "compressionEfficiency": 2,
       "unsupportedAdditionsCount": 0,
       "formatInvariantPassed": true,
       "literalInvariantsPassed": true,
-      "warningsDetected": [],
+      "warningsDetected": [
+        "PROMPT_ALREADY_OPTIMIZED",
+        "NO_SAFE_COMPRESSION"
+      ],
       "tokenMetrics": {
         "rawTokens": 25,
-        "highContextTokens": 27,
-        "lowTokenTokens": 20,
-        "lowTokenReductionPercent": 20
+        "highContextTokens": 41,
+        "lowTokenTokens": 25,
+        "lowTokenReductionPercent": 0
       },
       "passed": true,
       "failureReasons": []
@@ -436,11 +451,12 @@
       "literalInvariantsPassed": true,
       "warningsDetected": [
         "PROMPT_ALREADY_OPTIMIZED",
+        "NO_SAFE_COMPRESSION",
         "NO_SAFE_COMPRESSION"
       ],
       "tokenMetrics": {
         "rawTokens": 4,
-        "highContextTokens": 20,
+        "highContextTokens": 21,
         "lowTokenTokens": 4,
         "lowTokenReductionPercent": 0
       },
@@ -461,7 +477,7 @@
       "warningsDetected": [],
       "tokenMetrics": {
         "rawTokens": 35,
-        "highContextTokens": 29,
+        "highContextTokens": 32,
         "lowTokenTokens": 29,
         "lowTokenReductionPercent": 17.1
       },

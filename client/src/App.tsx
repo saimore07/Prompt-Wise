@@ -7,7 +7,9 @@ import { PromptInputPanel } from './components/PromptInputPanel.js';
 import { TokenComparisonBar } from './components/TokenComparisonBar.js';
 import { VariantColumn } from './components/VariantColumn.js';
 import { WarningsBanner } from './components/WarningsBanner.js';
-import { executePrompt, fetchHealth, optimizePrompt } from './lib/api.js';
+import { WarningBanner } from './components/WarningBanner.js';
+import { CostArbitrageTable } from './components/CostArbitrageTable.js';
+import { executePrompt, fetchHealth, optimizePrompt, optimizePromptStream } from './lib/api.js';
 import { getModelDisplayName } from './lib/models.js';
 import {
   ExecutionResult,
@@ -19,12 +21,14 @@ import {
 export const App: React.FC = () => {
   // App branding (configurable in UI)
   const [appName, setAppName] = useState(() => {
-    return localStorage.getItem('optiprompt_app_name') || 'OptiPrompt';
+    const saved = localStorage.getItem('promptwise_app_name') || localStorage.getItem('optiprompt_app_name');
+    if (!saved || saved === 'OptiPrompt') return 'PromptWise';
+    return saved;
   });
 
   const handleUpdateAppName = (name: string) => {
     setAppName(name);
-    localStorage.setItem('optiprompt_app_name', name);
+    localStorage.setItem('promptwise_app_name', name);
   };
 
   // Service Health
@@ -95,7 +99,7 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  // Phase 1: Optimize Prompt
+  // Phase 1: Optimize Prompt with Real SSE Streaming
   const handleOptimize = async () => {
     if (!rawPrompt.trim() || isOptimizing) return;
 
@@ -104,26 +108,31 @@ export const App: React.FC = () => {
     const reqTimestamp = Date.now();
     latestRequestIdRef.current = reqTimestamp;
 
-    // Real progress steps
-    setProgressStep('Analyzing intent & constraints...');
-    const t1 = setTimeout(() => {
-      if (latestRequestIdRef.current === reqTimestamp) {
-        setProgressStep('Generating High-Context & Low-Token variants...');
-      }
-    }, 400);
-
-    const t2 = setTimeout(() => {
-      if (latestRequestIdRef.current === reqTimestamp) {
-        setProgressStep('Counting tokens via native engine...');
-      }
-    }, 800);
+    // Real SSE streaming progress stages
+    setProgressStep('Connecting to Optimization Pipeline...');
 
     try {
-      const result = await optimizePrompt({
-        rawPrompt,
-        taskCategory: category,
-        model: selectedModel,
-      });
+      let result: OptimizationResult;
+      if (typeof optimizePromptStream === 'function') {
+        result = await optimizePromptStream(
+          {
+            rawPrompt,
+            taskCategory: category,
+            model: selectedModel,
+          },
+          (stage) => {
+            if (latestRequestIdRef.current === reqTimestamp) {
+              setProgressStep(stage.label);
+            }
+          }
+        );
+      } else {
+        result = await optimizePrompt({
+          rawPrompt,
+          taskCategory: category,
+          model: selectedModel,
+        });
+      }
 
       // Avoid stale response overwriting
       if (latestRequestIdRef.current !== reqTimestamp) return;
@@ -137,8 +146,6 @@ export const App: React.FC = () => {
         setErrorMessage(err.message || 'Failed to optimize prompt. Please check your connection.');
       }
     } finally {
-      clearTimeout(t1);
-      clearTimeout(t2);
       if (latestRequestIdRef.current === reqTimestamp) {
         setIsOptimizing(false);
         setProgressStep(null);
@@ -228,7 +235,7 @@ export const App: React.FC = () => {
             </button>
             {isSidebarOpen && (
               <span className="text-xs font-semibold uppercase tracking-wider text-[#444746] dark:text-[#9AA0A6]">
-                OptiPrompt
+                {appName}
               </span>
             )}
           </div>
@@ -329,6 +336,11 @@ export const App: React.FC = () => {
                       </p>
                     </div>
                   </div>
+                )}
+
+                {/* Zero-Shot Security Shield Banner */}
+                {optimizationResult.securityWarnings && optimizationResult.securityWarnings.length > 0 && (
+                  <WarningBanner securityWarnings={optimizationResult.securityWarnings} />
                 )}
 
                 {/* Warnings (if any) */}
@@ -492,6 +504,11 @@ export const App: React.FC = () => {
                     />
                   </div>
                 </div>
+
+                {/* Multi-Model Cost Arbitrage Router */}
+                {optimizationResult.arbitrageMetrics && optimizationResult.arbitrageMetrics.length > 0 && (
+                  <CostArbitrageTable arbitrageMetrics={optimizationResult.arbitrageMetrics} />
+                )}
               </section>
             )}
 
@@ -511,7 +528,7 @@ export const App: React.FC = () => {
         </main>
 
         {/* Locked Footer to Viewport */}
-        <div className="fixed bottom-0 left-0 right-0 w-full z-50 bg-gradient-to-t from-[#F0F4F9] via-[#F0F4F9] to-transparent dark:from-[#131314] dark:via-[#131314] pt-20 pb-6 px-4 flex justify-center pointer-events-none">
+        <div className="fixed bottom-0 left-0 right-0 w-full z-30 bg-gradient-to-t from-[#F0F4F9] via-[#F0F4F9] to-transparent dark:from-[#131314] dark:via-[#131314] pt-20 pb-6 px-4 flex justify-center pointer-events-none">
           <div className="w-full max-w-[850px] pointer-events-auto">
             <section aria-label="Prompt Input">
               <PromptInputPanel

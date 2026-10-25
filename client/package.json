@@ -2,7 +2,7 @@
   "name": "optiprompt-client",
   "version": "1.0.0",
   "private": true,
-  "description": "Frontend for OptiPrompt - Prompt Optimization & Token Efficiency Engine",
+  "description": "Frontend for PromptWise - Prompt Optimization & Token Efficiency Engine",
   "type": "module",
   "scripts": {
     "dev": "vite",

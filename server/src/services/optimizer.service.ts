@@ -1,6 +1,7 @@
 import { performance } from 'perf_hooks';
 import { config } from '../config/env.js';
 import {
+  CostArbitrageItem,
   DetectedConstraints,
   GeminiOptimizationOutput,
   GeminiOptimizationOutputSchema,
@@ -9,6 +10,7 @@ import {
   Recommendation,
   StageTimings,
   TaskCategory,
+  TokenizerFamily,
   VerificationDetails,
 } from '../schemas/optimization.schema.js';
 import { IGeminiService } from './gemini.service.js';
@@ -30,24 +32,46 @@ export class OptimizerService {
     rawPrompt: string;
     taskCategory?: TaskCategory;
     model?: string;
+    modelFamily?: string;
+    tokenizerFamily?: TokenizerFamily;
     requestId: string;
+    onProgress?: (stage: { id: string; label: string; percent: number }) => void;
   }): Promise<OptimizationResult> {
     const totalStart = performance.now();
-    const { rawPrompt, taskCategory = 'Auto', requestId } = params;
+    const { rawPrompt, taskCategory = 'Auto', requestId, onProgress } = params;
     const model = this.resolveModel(params.model);
 
-    // Defense-in-depth: Prompt injection check on raw prompt
+    // Stage 1: Security Scan, Prompt Injection & Masking Check
+    onProgress?.({
+      id: 'STAGE_1_MASKING',
+      label: 'Stage 1: Masking & Sanitizing Input...',
+      percent: 15,
+    });
     const promptInjectionDetected = this.detectPromptInjection(rawPrompt);
+    const securityWarnings = this.scanSecurityWarnings(rawPrompt);
 
     // Concurrency Optimization: Prefetch raw prompt token count concurrently with LLM generation
     const rawTokenPrefetchPromise = this.tokenMetricsService
-      .countSingleWithCache(model, rawPrompt)
+      .countSingleWithCache(model, rawPrompt, params.tokenizerFamily)
       .catch(() => null);
 
-    // Stage 1: Intent Analysis & Structured Variant Generation
+    // Stage 2: Intent Analysis & Programmatic R_hard Extraction
+    onProgress?.({
+      id: 'STAGE_2_ANALYSIS',
+      label: 'Stage 2: Extracting Hard Constraints (R_hard)...',
+      percent: 35,
+    });
+    const programmaticHard = this.extractHardConstraintsProgrammatic(rawPrompt);
+
+    // Stage 3: Concurrent Variant Generation (Promise.all)
+    onProgress?.({
+      id: 'STAGE_3_GENERATION',
+      label: 'Stage 3: Generating High-Context & Low-Token Variants (Concurrent Promise.all)...',
+      percent: 60,
+    });
     const genStart = performance.now();
     const promptMessage = buildOptimizationPrompt(rawPrompt, taskCategory);
-    let output = await this.generateAndParseVariants(model, promptMessage);
+    let output = await this.generateVariantsConcurrent(model, promptMessage, rawPrompt, taskCategory);
     const analysisAndGenerationMs = Number((performance.now() - genStart).toFixed(2));
 
     const warnings: OptimizationWarning[] = [...output.warnings];
@@ -57,6 +81,13 @@ export class OptimizerService {
         code: 'PROMPT_INJECTION_DEFENSE_TRIGGERED',
         message: 'Prompt contains meta-instructions or override patterns. Analyzed strictly as task data.',
       });
+    }
+
+    // Merge programmatic exact literals into detectedConstraints
+    if (programmaticHard.exactLiterals.length > 0) {
+      output.detectedConstraints.exactLiterals = Array.from(
+        new Set([...(output.detectedConstraints.exactLiterals || []), ...programmaticHard.exactLiterals])
+      );
     }
 
     // Check if compression was unsafe or infeasible (Case 19)
@@ -69,7 +100,12 @@ export class OptimizerService {
       }
     }
 
-    // Stage 2: Verification Gate for both variants
+    // Stage 4: Fortified Phase 2 Verification Gate (Programmatic Substring/Keyword Judge)
+    onProgress?.({
+      id: 'STAGE_4_VERIFICATION',
+      label: 'Stage 4: Programmatic Hard-Constraint Verification...',
+      percent: 80,
+    });
     const verifStart = performance.now();
     const highContextVerification = this.verifyVariant(
       output.highContext,
@@ -119,7 +155,7 @@ export class OptimizerService {
       }
     }
 
-    // Safe Recommendation Gating: If low-token variant failed verification, revert recommendation
+    // Safe Recommendation Gating & Backoff Recovery: If low-token variant failed verification, revert recommendation
     let finalRecommendation: Recommendation = { ...output.recommendation };
     if (output.recommendation.variant === 'lowToken' && !lowTokenVerification.passed) {
       lowTokenVerification.fallbackApplied = true;
@@ -145,7 +181,12 @@ export class OptimizerService {
     }
     const verificationMs = Number((performance.now() - verifStart).toFixed(2));
 
-    // Stage 3: Token Counting & Two-Way Cost Analytics
+    // Stage 5: Multi-Family Token Counting & Arbitrage Analytics
+    onProgress?.({
+      id: 'STAGE_5_METRICS',
+      label: 'Stage 5: Computing Multi-Family Token Metrics & Arbitrage...',
+      percent: 95,
+    });
     const tokenStart = performance.now();
     // Await the prefetched raw count
     const precomputedRawTokens = await rawTokenPrefetchPromise;
@@ -156,6 +197,7 @@ export class OptimizerService {
       highContext: output.highContext,
       lowToken: output.lowToken,
       precomputedRawTokens,
+      tokenizerFamily: params.tokenizerFamily,
     });
 
     warnings.push(...tokenCounts.warnings);
@@ -182,9 +224,13 @@ export class OptimizerService {
       tokenCounts,
       model,
       output.taskCategory || taskCategory,
-      output.detectedConstraints.lengthLimit
+      output.detectedConstraints.lengthLimit,
+      params.tokenizerFamily
     );
     const tokenCountingMs = Number((performance.now() - tokenStart).toFixed(2));
+
+    // Multi-Model Cost Arbitrage calculation across GPT-4o-mini, Claude 3.5 Haiku, and Llama 3.1 8B
+    const arbitrageMetrics = this.calculateCostArbitrage(metrics.rawTokens, metrics.lowTokenTokens);
 
     // Determine target provider for multi-model prompting
     let targetProvider = 'NVIDIA Nemotron';
@@ -254,6 +300,7 @@ export class OptimizerService {
       highContext: output.highContext,
       lowToken: output.lowToken,
       warnings,
+      securityWarnings,
       recommendation: finalRecommendation,
       metrics,
       verificationStatus: {
@@ -264,12 +311,209 @@ export class OptimizerService {
       isAlreadyOptimized,
       optimizationStatus,
       targetProvider,
+      arbitrageMetrics,
     };
   }
 
   /**
+   * Programmatically extracts hard constraints (R_hard) from raw prompt text:
+   * 1. Exact literals (regexes, code paths, file extensions, quoted terms, API keys)
+   * 2. Numeric / boundary limits (e.g. "under 80 words", "10 words", "5 examples")
+   * 3. Prohibitions and negative constraints (e.g. "no markdown", "do not use external libraries")
+   */
+  public extractHardConstraintsProgrammatic(rawPrompt: string): {
+    exactLiterals: string[];
+    hardKeywords: string[];
+    mustAvoid: string[];
+  } {
+    const exactLiterals: Set<string> = new Set();
+    const hardKeywords: Set<string> = new Set();
+    const mustAvoid: Set<string> = new Set();
+
+    // 1. Regex patterns (e.g. /^AIza[0-9]{10}$/ or /^[A-Z]{2}-\d{4}$/)
+    const regexMatches = rawPrompt.match(/\/[^\/\s]+\/[gimsuy]*/g);
+    if (regexMatches) {
+      regexMatches.forEach((r) => exactLiterals.add(r));
+    }
+
+    // 2. File paths and extensions (e.g. src/server/index.ts, .env, index.html)
+    const filePathMatches = rawPrompt.match(/[\w\-./\\]+\.[a-zA-Z]{2,4}\b/g);
+    if (filePathMatches) {
+      filePathMatches.forEach((p) => {
+        if (!p.includes('..') && p.length > 3) exactLiterals.add(p);
+      });
+    }
+
+    // 3. Quoted literals (e.g. "name", 'age', "created_at")
+    const quotedMatches = rawPrompt.match(/["']([^"'\n\r]+)["']/g);
+    if (quotedMatches) {
+      quotedMatches.forEach((q) => {
+        const clean = q.slice(1, -1).trim();
+        if (clean.length > 1) exactLiterals.add(clean);
+      });
+    }
+
+    // 4. Schema keys / snake_case identifiers (e.g. user_id, auth_token)
+    const snakeMatches = rawPrompt.match(/\b[a-z0-9]+_[a-z0-9_]+\b/g);
+    if (snakeMatches) {
+      snakeMatches.forEach((k) => exactLiterals.add(k));
+    }
+
+    // 5. Length constraints (e.g., "under 80 words", "10 words", "50 characters")
+    const lengthMatches = rawPrompt.match(
+      /\b(under|less than|max|exactly|within)?\s*\d+\s*(words?|chars?|characters?|sentences?|lines?)\b/gi
+    );
+    if (lengthMatches) {
+      lengthMatches.forEach((l) => hardKeywords.add(l.trim()));
+    }
+
+    // 6. Prohibitions and negative constraints (e.g., "no markdown", "do not use external libraries")
+    const prohibitionMatches = rawPrompt.match(
+      /\b(do not|don't|no|never|without)\s+[\w\s]{3,35}(?=[,.;]|$)/gi
+    );
+    if (prohibitionMatches) {
+      prohibitionMatches.forEach((p) => mustAvoid.add(p.trim()));
+    }
+
+    return {
+      exactLiterals: Array.from(exactLiterals),
+      hardKeywords: Array.from(hardKeywords),
+      mustAvoid: Array.from(mustAvoid),
+    };
+  }
+
+  /**
+   * Scans the raw user prompt for zero-shot prompt injection attempts and meta-instruction overrides.
+   */
+  public scanSecurityWarnings(prompt: string): string[] {
+    const warnings: string[] = [];
+    const lower = prompt.toLowerCase();
+    if (
+      lower.includes('ignore previous instructions') ||
+      lower.includes('ignore all previous') ||
+      lower.includes('ignore prior instructions') ||
+      lower.includes('disregard rules') ||
+      lower.includes('disregard previous instructions') ||
+      lower.includes('forget all prior instructions')
+    ) {
+      warnings.push('PROMPT_INJECTION_OVERRIDE: Detected meta-instruction attempting to override system behavior.');
+    }
+    if (
+      lower.includes('system override') ||
+      lower.includes('developer mode') ||
+      lower.includes('dan mode') ||
+      lower.includes('jailbreak') ||
+      lower.includes('act as uncensored') ||
+      lower.includes('bypass safety filters')
+    ) {
+      warnings.push('JAILBREAK_PATTERN: Detected developer mode or persona jailbreak pattern.');
+    }
+    if (
+      lower.includes('reveal system prompt') ||
+      lower.includes('output initial prompt') ||
+      lower.includes('reveal your instructions') ||
+      lower.includes('show system prompt') ||
+      lower.includes('api key') ||
+      lower.includes('leak credentials')
+    ) {
+      warnings.push('DATA_EXFILTRATION: Detected attempt to extract internal system prompt or credentials.');
+    }
+    return warnings;
+  }
+
+  /**
+   * Aggressively restructures and condenses chatty, multi-line few-shot examples
+   * into minified JSON arrays or dense markdown tables.
+   */
+  public compressFewShotExamples(text: string, format: 'json' | 'table' = 'json'): string {
+    const itemPattern = /(?:(?:Example|Sample|Case)\s*\d+[:.\s]*)?\s*(?:Input|Q|Question):\s*([^\n\r]+)\s*(?:Output|A|Answer):\s*([^\n\r]+)/gi;
+    const matches: Array<{ in: string; out: string }> = [];
+    let m: RegExpExecArray | null;
+    while ((m = itemPattern.exec(text)) !== null) {
+      matches.push({ in: m[1].trim(), out: m[2].trim() });
+    }
+
+    if (matches.length >= 2) {
+      let compressed = '';
+      if (format === 'table') {
+        const rows = matches.map((item) => `| ${item.in} | ${item.out} |`).join('\n');
+        compressed = `| input | output |\n|---|---|\n${rows}`;
+      } else {
+        compressed = `examples=${JSON.stringify(matches)}`;
+      }
+
+      const firstPos = text.search(/(?:(?:Here are (?:some )?examples:?|Examples:?)\s*)?(?:(?:Example|Sample|Case)\s*\d+[:.\s]*)?\s*(?:Input|Q|Question):/i);
+      const lastItem = matches[matches.length - 1];
+      const lastPos = text.lastIndexOf(lastItem.out);
+      const endPos = lastPos !== -1 ? lastPos + lastItem.out.length : -1;
+
+      if (firstPos !== -1 && endPos !== -1 && endPos >= firstPos) {
+        const before = text.substring(0, firstPos).trimEnd();
+        const after = text.substring(endPos).trimStart();
+        return (before ? before + '\n' : '') + compressed + (after ? '\n' + after : '');
+      }
+    }
+
+    return text;
+  }
+
+  /**
+   * Computes multi-model cost arbitrage comparison across GPT-4o-mini, Claude 3.5 Haiku, and Llama 3.1 8B.
+   */
+  public calculateCostArbitrage(rawTokens: number | null, lowTokens: number | null): CostArbitrageItem[] {
+    const tin = lowTokens ?? rawTokens ?? 100;
+    const tout = 150; // standard estimated output tokens
+
+    const models = [
+      {
+        model: 'gpt-4o-mini',
+        provider: 'OpenAI',
+        inputPricePerM: 0.15,
+        outputPricePerM: 0.60,
+      },
+      {
+        model: 'claude-3-5-haiku',
+        provider: 'Anthropic',
+        inputPricePerM: 0.80,
+        outputPricePerM: 4.00,
+      },
+      {
+        model: 'llama-3.1-8b',
+        provider: 'Meta / Groq',
+        inputPricePerM: 0.05,
+        outputPricePerM: 0.05,
+      },
+    ];
+
+    // Baseline using standard flagship model spend (e.g. GPT-4o: $2.50 input / $10.00 output)
+    const baselineSpend = (tin / 1_000_000) * 2.50 + (tout / 1_000_000) * 10.00;
+
+    return models.map((m) => {
+      const inputCost = Number(((tin / 1_000_000) * m.inputPricePerM).toFixed(6));
+      const estimatedOutputCost = Number(((tout / 1_000_000) * m.outputPricePerM).toFixed(6));
+      const totalCostPerCall = Number((inputCost + estimatedOutputCost).toFixed(6));
+      const costPer1kCalls = Number((totalCostPerCall * 1000).toFixed(4));
+      const savingsPercentVsBaseline = Number(
+        (((baselineSpend - totalCostPerCall) / baselineSpend) * 100).toFixed(1)
+      );
+
+      return {
+        model: m.model,
+        provider: m.provider,
+        inputPricePerM: m.inputPricePerM,
+        outputPricePerM: m.outputPricePerM,
+        inputCost,
+        estimatedOutputCost,
+        totalCostPerCall,
+        costPer1kCalls,
+        savingsPercentVsBaseline,
+      };
+    });
+  }
+
+  /**
    * Evaluates whether a prompt variant strictly preserves required hard constraints,
-   * exact literals, and negative prohibitions.
+   * exact literals, and negative prohibitions using programmatic checks.
    */
   public verifyVariant(
     variantText: string,
@@ -283,9 +527,12 @@ export class OptimizerService {
     const exactLiteralsMissing: string[] = [];
     const negativeConstraintsViolated: string[] = [];
 
-    // 1. Exact literals (case-sensitive check)
-    const literals = constraints.exactLiterals || [];
-    for (const lit of literals) {
+    // Programmatic constraint extraction from raw prompt
+    const programmatic = this.extractHardConstraintsProgrammatic(rawPrompt);
+
+    // 1. Exact literals (case-sensitive programmatic + detected check)
+    const allLiterals = Array.from(new Set([...(constraints.exactLiterals || []), ...programmatic.exactLiterals]));
+    for (const lit of allLiterals) {
       if (rawPrompt.includes(lit)) {
         if (variantText.includes(lit)) {
           exactLiteralsSatisfied.push(lit);
@@ -295,12 +542,12 @@ export class OptimizerService {
       }
     }
 
-    // 2. Must-preserve requirements (case-insensitive, normalized semantic check)
-    const preserves = constraints.mustPreserve || [];
+    // 2. Must-preserve requirements (case-insensitive semantic check)
+    const allPreserves = Array.from(new Set([...(constraints.mustPreserve || []), ...programmatic.hardKeywords]));
     const variantLower = variantText.toLowerCase();
     const rawLower = rawPrompt.toLowerCase();
 
-    for (const req of preserves) {
+    for (const req of allPreserves) {
       if (!req || req.trim() === '') continue;
       const cleanReq = req.replace(/_/g, ' ').trim().toLowerCase();
 
@@ -316,13 +563,12 @@ export class OptimizerService {
         continue;
       }
 
-      // Case C: The requirement is an LLM-synthesized summary or tag (e.g., "generation_of_a_joke", "Python script generation")
+      // Case C: Content-word overlap check
       const stopWords = new Set(['the', 'and', 'for', 'with', 'that', 'this', 'from', 'into', 'generation', 'requirement', 'output', 'user', 'logic']);
       const contentWords = cleanReq.split(/\s+/).filter((w) => w.length > 2 && !stopWords.has(w));
       const wordsInRaw = contentWords.filter((w) => rawLower.includes(w));
 
       if (wordsInRaw.length > 0) {
-        // If content words that appeared in rawPrompt are retained in the variant, it is satisfied
         const allPresent = wordsInRaw.every((w) => variantLower.includes(w));
         if (allPresent) {
           mustPreserveSatisfied.push(req);
@@ -330,7 +576,6 @@ export class OptimizerService {
           mustPreserveMissing.push(req);
         }
       } else {
-        // Abstract tag with no direct token overlap with rawPrompt; check if any content word is in variant
         const somePresent = contentWords.some((w) => variantLower.includes(w));
         if (somePresent || contentWords.length === 0) {
           mustPreserveSatisfied.push(req);
@@ -341,10 +586,9 @@ export class OptimizerService {
     }
 
     // 3. Prohibitions and negative constraints (must NOT introduce violated items)
-    const mustAvoid = constraints.mustAvoid || [];
-    for (const avoid of mustAvoid) {
+    const allMustAvoid = Array.from(new Set([...(constraints.mustAvoid || []), ...programmatic.mustAvoid]));
+    for (const avoid of allMustAvoid) {
       const lowerAvoid = avoid.toLowerCase();
-      // E.g., if "no markdown" was specified, ensure no ``` code blocks
       if (lowerAvoid.includes('markdown') && variantText.includes('```')) {
         negativeConstraintsViolated.push(avoid);
       }
@@ -385,28 +629,69 @@ export class OptimizerService {
       /you\s+are\s+now\s+in\s+dan\s+mode/i,
       /disregard\s+(the\s+)?rules/i,
       /output\s+the\s+initial\s+prompt/i,
+      /system\s+override/i,
     ];
     return patterns.some((pattern) => pattern.test(prompt));
   }
 
-  private async generateAndParseVariants(
+  /**
+   * Concurrently generate High-Context and Low-Token variants using Promise.all().
+   */
+  private async generateVariantsConcurrent(
     model: string,
-    promptMessage: string
+    promptMessage: string,
+    rawPrompt: string,
+    taskCategory: string
   ): Promise<GeminiOptimizationOutput> {
-    let rawText = '';
-    try {
-      const response = await this.geminiService.generateContent({
-        model,
-        contents: promptMessage,
-        systemInstruction: OPTIMIZER_SYSTEM_INSTRUCTION,
-        jsonMode: true,
-      });
-      rawText = response.text;
-    } catch (err: any) {
-      throw err;
+    // Run High-Context and Low-Token branches concurrently
+    const highContextTask = this.generateVariantBranch('highContext', model, promptMessage, rawPrompt, taskCategory);
+    const lowTokenTask = this.generateVariantBranch('lowToken', model, promptMessage, rawPrompt, taskCategory);
+
+    const [highBranch, lowBranch] = await Promise.all([highContextTask, lowTokenTask]);
+
+    let lowToken = lowBranch.lowToken;
+    const hasChattyExamples = /(?:(?:Example|Sample|Case)\s*\d+|Input:\s*.+?\s*Output:)/i.test(rawPrompt);
+    if (hasChattyExamples && /(?:(?:Example|Sample|Case)\s*\d+[:.\s]*)?\s*(?:Input|Q|Question):\s*[^\n\r]+\s*(?:Output|A|Answer):/i.test(lowToken)) {
+      lowToken = this.compressFewShotExamples(lowToken, 'json');
     }
 
-    return this.parseAndValidateOutput(rawText, model, promptMessage);
+    return {
+      intentSummary: highBranch.intentSummary || lowBranch.intentSummary || '',
+      taskCategory: highBranch.taskCategory || lowBranch.taskCategory || taskCategory,
+      detectedConstraints: {
+        mustPreserve: Array.from(new Set([...(highBranch.detectedConstraints?.mustPreserve || []), ...(lowBranch.detectedConstraints?.mustPreserve || [])])),
+        outputFormat: highBranch.detectedConstraints?.outputFormat || lowBranch.detectedConstraints?.outputFormat || null,
+        lengthLimit: highBranch.detectedConstraints?.lengthLimit || lowBranch.detectedConstraints?.lengthLimit || null,
+        language: highBranch.detectedConstraints?.language || lowBranch.detectedConstraints?.language || null,
+        mustAvoid: Array.from(new Set([...(highBranch.detectedConstraints?.mustAvoid || []), ...(lowBranch.detectedConstraints?.mustAvoid || [])])),
+        exactLiterals: Array.from(new Set([...(highBranch.detectedConstraints?.exactLiterals || []), ...(lowBranch.detectedConstraints?.exactLiterals || [])])),
+      },
+      highContext: highBranch.highContext,
+      lowToken,
+      warnings: [...(highBranch.warnings || []), ...(lowBranch.warnings || [])],
+      recommendation: lowBranch.recommendation || highBranch.recommendation,
+    };
+  }
+
+  private async generateVariantBranch(
+    branch: 'highContext' | 'lowToken',
+    model: string,
+    promptMessage: string,
+    rawPrompt: string,
+    taskCategory: string
+  ): Promise<GeminiOptimizationOutput> {
+    const branchPrompt = branch === 'highContext'
+      ? `${promptMessage}\n\n[Branch Directive]: Synthesize High-Context structure (Role, Objective, Context, Constraints, Format) with full invariant preservation.`
+      : `${promptMessage}\n\n[Branch Directive]: Synthesize Low-Token lean compression (Imperative, strip filler, aggressively restructure chatty few-shot examples into minified JSON arrays examples=[{"in":"...","out":"..."}] or dense markdown tables, retain literals).`;
+
+    const response = await this.geminiService.generateContent({
+      model,
+      contents: branchPrompt,
+      systemInstruction: OPTIMIZER_SYSTEM_INSTRUCTION,
+      jsonMode: true,
+    });
+
+    return this.parseAndValidateOutput(response.text, model, branchPrompt);
   }
 
   private async parseAndValidateOutput(

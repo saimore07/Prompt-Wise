@@ -14,6 +14,17 @@ export const TaskCategoryEnum = z.enum([
 
 export type TaskCategory = z.infer<typeof TaskCategoryEnum>;
 
+export const TokenizerFamilyEnum = z.enum([
+  'openai-o200k',
+  'openai-cl100k',
+  'anthropic-claude',
+  'llama3-nemotron',
+  'google-gemini',
+  'auto',
+]);
+
+export type TokenizerFamily = z.infer<typeof TokenizerFamilyEnum>;
+
 export const OptimizationRequestSchema = z.object({
   rawPrompt: z
     .string({ required_error: 'rawPrompt is required' })
@@ -24,6 +35,9 @@ export const OptimizationRequestSchema = z.object({
     }),
   taskCategory: TaskCategoryEnum.optional().default('Auto'),
   model: z.string().optional(),
+  modelFamily: z.string().optional(),
+  tokenizerFamily: TokenizerFamilyEnum.optional().default('auto'),
+  stream: z.boolean().optional().default(false),
 });
 
 export type OptimizationRequest = z.infer<typeof OptimizationRequestSchema>;
@@ -94,10 +108,25 @@ export const MetricsSchema = z.object({
   highContextChangePercent: z.number().nullable(),
   lowTokenReductionPercent: z.number().nullable(),
   measuredWith: z.string(),
+  tokenizerFamily: TokenizerFamilyEnum.optional(),
   costEstimate: CostEstimateSchema.nullable(),
 });
 
 export type Metrics = z.infer<typeof MetricsSchema>;
+
+export const CostArbitrageItemSchema = z.object({
+  model: z.string(),
+  provider: z.string(),
+  inputPricePerM: z.number(),
+  outputPricePerM: z.number(),
+  inputCost: z.number(),
+  estimatedOutputCost: z.number(),
+  totalCostPerCall: z.number(),
+  costPer1kCalls: z.number(),
+  savingsPercentVsBaseline: z.number(),
+});
+
+export type CostArbitrageItem = z.infer<typeof CostArbitrageItemSchema>;
 
 export const OptimizationResultSchema = z.object({
   requestId: z.string(),
@@ -109,6 +138,7 @@ export const OptimizationResultSchema = z.object({
   highContext: z.string(),
   lowToken: z.string(),
   warnings: z.array(OptimizationWarningSchema),
+  securityWarnings: z.array(z.string()).default([]),
   recommendation: RecommendationSchema,
   metrics: MetricsSchema,
   verificationStatus: z
@@ -121,6 +151,7 @@ export const OptimizationResultSchema = z.object({
   isAlreadyOptimized: z.boolean().default(false),
   optimizationStatus: z.enum(['OPTIMIZED', 'ALREADY_OPTIMIZED', 'MINIMAL_GAINS']).default('OPTIMIZED'),
   targetProvider: z.string().optional(),
+  arbitrageMetrics: z.array(CostArbitrageItemSchema).optional(),
 });
 
 export type OptimizationResult = z.infer<typeof OptimizationResultSchema>;

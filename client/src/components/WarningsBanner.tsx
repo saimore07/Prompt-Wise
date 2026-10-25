@@ -46,3 +46,5 @@ export const WarningsBanner: React.FC<WarningsBannerProps> = ({ warnings }) => {
     </div>
   );
 };
+
+export { WarningBanner } from './WarningBanner.js';

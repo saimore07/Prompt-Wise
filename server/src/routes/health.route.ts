@@ -7,7 +7,7 @@ export function createHealthRouter(): Router {
   router.get('/health', (_req: Request, res: Response) => {
     res.json({
       status: 'ok',
-      service: 'OptiPrompt API',
+      service: 'PromptWise API',
       model: config.DEFAULT_MODEL || 'nvidia/nemotron-3.5-bolt-e4b',
       hasApiKey: Boolean(
         (config.NVIDIA_API_KEY && config.NVIDIA_API_KEY.length > 5) ||
