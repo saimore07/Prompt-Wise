@@ -35,10 +35,13 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
       field: e.path.join('.'),
       message: sanitizeMessage(e.message),
     }));
-  } else if (err instanceof GeminiConfigError) {
+  } else if (
+    err instanceof GeminiConfigError ||
+    (err?.message && String(err.message).toLowerCase().includes('api key is not configured'))
+  ) {
     statusCode = 503;
     code = 'CONFIG_ERROR';
-    message = 'The AI service is not properly configured on the server. Please verify credentials.';
+    message = 'AI API key is not configured on the server. Please set NVIDIA_API_KEY or GEMINI_API_KEY in your environment variables.';
   } else if (err instanceof GeminiRateLimitError) {
     statusCode = 429;
     code = 'RATE_LIMIT_EXCEEDED';

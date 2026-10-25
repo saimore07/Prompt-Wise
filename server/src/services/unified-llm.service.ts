@@ -1,6 +1,7 @@
 import { config } from '../config/env.js';
 import {
   CountTokensParams,
+  GeminiConfigError,
   GeminiRateLimitError,
   GenerateContentParams,
   GenerateContentResult,
@@ -20,8 +21,12 @@ export class UnifiedLLMService implements IGeminiService {
       params.model.startsWith('nvidia/') ||
       params.model.includes('bolt');
 
-    // If Nemotron is explicitly requested or NVIDIA_API_KEY is configured as default
-    if (isNemotronModel || (config.NVIDIA_API_KEY && config.DEFAULT_MODEL.includes('nemotron'))) {
+    // If Nemotron is explicitly requested, or NVIDIA_API_KEY is configured and GEMINI_API_KEY is not
+    if (
+      isNemotronModel ||
+      (config.NVIDIA_API_KEY && !config.GEMINI_API_KEY) ||
+      (config.NVIDIA_API_KEY && config.DEFAULT_MODEL.includes('nemotron'))
+    ) {
       try {
         return await this.nemotronService.generateContent(params);
       } catch (err: any) {
@@ -36,7 +41,7 @@ export class UnifiedLLMService implements IGeminiService {
       }
     }
 
-    // Otherwise, try Gemini with automatic fallback to Nemotron on quota/rate limit exhaustion
+    // Otherwise, try Gemini with automatic fallback to Nemotron on quota/rate limit exhaustion or missing Gemini key
     try {
       return await this.geminiService.generateContent(params);
     } catch (err: any) {
@@ -46,9 +51,13 @@ export class UnifiedLLMService implements IGeminiService {
         String(err?.message || '').toLowerCase().includes('quota') ||
         String(err?.message || '').toLowerCase().includes('rate limit');
 
-      if (isRateLimit && config.NVIDIA_API_KEY) {
+      const isConfigError =
+        err instanceof GeminiConfigError ||
+        String(err?.message || '').toLowerCase().includes('not configured');
+
+      if ((isRateLimit || isConfigError) && config.NVIDIA_API_KEY) {
         console.warn(
-          '[UnifiedLLMService] Gemini API quota / rate limit exceeded. Automatically routing to free open-source NVIDIA Nemotron...'
+          '[UnifiedLLMService] Gemini unavailable or not configured. Automatically routing to free open-source NVIDIA Nemotron...'
         );
         return await this.nemotronService.generateContent({
           ...params,
@@ -65,7 +74,11 @@ export class UnifiedLLMService implements IGeminiService {
       params.model.startsWith('nvidia/') ||
       params.model.includes('bolt');
 
-    if (isNemotronModel || (config.NVIDIA_API_KEY && config.DEFAULT_MODEL.includes('nemotron'))) {
+    if (
+      isNemotronModel ||
+      (config.NVIDIA_API_KEY && !config.GEMINI_API_KEY) ||
+      (config.NVIDIA_API_KEY && config.DEFAULT_MODEL.includes('nemotron'))
+    ) {
       return await this.nemotronService.countTokens(params);
     }
 

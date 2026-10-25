@@ -1,8 +1,15 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Load environment variables from .env file in server or workspace root
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Reliably load environment variables from server/.env, root/.env, and cwd
+dotenv.config({ path: path.resolve(__dirname, '../../.env') }); // server/.env
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') }); // root/.env
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config({ path: path.resolve(process.cwd(), 'server/.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
 
 export interface AppConfig {

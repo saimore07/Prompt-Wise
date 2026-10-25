@@ -30,10 +30,26 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 async function handleResponse<T>(res: Response): Promise<T> {
   const json = await res.json().catch(() => null);
   if (!res.ok) {
-    const errorPayload: ApiErrorPayload = json?.error || {
-      code: `HTTP_${res.status}`,
-      message: res.statusText || 'Request failed',
+    let message = json?.error?.message || json?.message;
+    if (!message) {
+      if (res.status === 404) {
+        message = 'API endpoint not found (404). Please verify routing.';
+      } else if (res.status === 503) {
+        message = 'AI API key is not configured on the server (503). Please set NVIDIA_API_KEY or GEMINI_API_KEY in your Vercel project settings.';
+      } else if (res.status === 504) {
+        message = 'Gateway timeout (504). The AI model request timed out.';
+      } else if (res.status >= 500) {
+        message = `Server error (${res.status}). Check Vercel Function logs.`;
+      } else {
+        message = res.statusText || `Request failed with status ${res.status}`;
+      }
+    }
+    const errorPayload: ApiErrorPayload = {
+      code: json?.error?.code || `HTTP_${res.status}`,
+      message,
+      details: json?.error?.details,
     };
+    console.error('[OptiPrompt API Error]', res.status, errorPayload);
     throw new ApiError(res.status, errorPayload);
   }
   return json.data !== undefined ? json.data : json;

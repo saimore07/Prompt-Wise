@@ -1,5 +1,16 @@
-import { createApp } from '../server/src/app.js';
+import type { Request, Response } from 'express';
+import { createApp } from '../server/dist/app.js';
 
-const app = createApp();
+let appInstance: any = null;
 
-export default app;
+function getApp() {
+  if (!appInstance) {
+    appInstance = createApp();
+  }
+  return appInstance;
+}
+
+export default function handler(req: Request, res: Response) {
+  const app = getApp();
+  return app(req, res);
+}
