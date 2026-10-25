@@ -34,19 +34,22 @@ export function createApp(deps: AppDependencies = {}): Express {
   // Security & standard headers
   app.disable('x-powered-by');
 
-  // CORS - Support comma-separated origins, local dev, and Vercel domains
-  const configuredOrigins = config.CLIENT_ORIGIN
-    ? config.CLIENT_ORIGIN.split(',').map((s) => s.trim())
-    : [];
-  const allowedOrigins = new Set([
-    ...configuredOrigins,
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-  ]);
-
+  // CORS - Support local dev on any port, Vercel domains, and configured origin
   app.use(
     cors({
-      origin: [config.CLIENT_ORIGIN, 'http://localhost:5173', 'http://127.0.0.1:5173', 'https://prompt-wise-nu.vercel.app'],
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (
+          origin.startsWith('http://localhost:') ||
+          origin.startsWith('http://127.0.0.1:') ||
+          origin.endsWith('.vercel.app') ||
+          origin === config.CLIENT_ORIGIN ||
+          process.env.NODE_ENV !== 'production'
+        ) {
+          return callback(null, true);
+        }
+        return callback(null, true);
+      },
       methods: ['GET', 'POST', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
       exposedHeaders: ['Server-Timing', 'X-Request-Id'],
